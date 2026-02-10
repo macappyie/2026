@@ -57,10 +57,15 @@ def fmt_vol(v):
 def flash_val(val, threshold, mode):
     try:
         v = float(val)
-        if mode == "gainer" and v >= threshold:
+
+        # GAINER → weak high
+        if mode == "gainer" and v < threshold:
             return f'<span class="flash-green">{v}</span>'
-        if mode == "loser" and v <= -threshold:
+
+        # LOSER → weak low
+        if mode == "loser" and v > -threshold:
             return f'<span class="flash-red">{v}</span>'
+
         return str(v)
     except:
         return ""
