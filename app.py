@@ -5,14 +5,10 @@ from datetime import datetime, timedelta
 import time
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="Top Gainers & Losers",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Live Top Gainers & Losers", layout="wide")
 st.title("📊 Live Top Gainers & Losers")
 
-# ---------------- READ SECRETS ----------------
+# ---------------- SECRETS ----------------
 API_KEY = st.secrets["API_KEY"]
 ACCESS_TOKEN = st.secrets["ACCESS_TOKEN"]
 
@@ -59,8 +55,8 @@ for i, sym in enumerate(WATCHLIST):
             continue
 
         c915 = candles[0]
-        c10 = next((c for c in candles if c["date"].strftime("%H:%M")=="10:00"), None)
-        c12 = next((c for c in candles if c["date"].strftime("%H:%M")=="12:00"), None)
+        c10 = next((c for c in candles if c["date"].strftime("%H:%M") == "10:00"), None)
+        c12 = next((c for c in candles if c["date"].strftime("%H:%M") == "12:00"), None)
 
         from_date = today - timedelta(days=15)
         vols = kite.historical_data(token, from_date, today - timedelta(days=1), "day")
@@ -73,39 +69,48 @@ for i, sym in enumerate(WATCHLIST):
 
         today_vs = ""
         if avg_raw > 0:
-            today_vs = f"{round(total_vol/avg_raw,2)}x"
+            today_vs = f"{round(total_vol / avg_raw, 2)}x"
 
         rows.append({
             "Symbol": sym,
-            "LTP": round(ltp,2),
+            "LTP": round(ltp, 2),
             "% Change": pct,
             "Avg Vol 7D": avg_vol,
             "Today Vs Avg": today_vs,
-            "9:15 High %": round(((c915["high"]-prev_close)/prev_close)*100,2),
-            "9:15 Low %": round(((c915["low"]-prev_close)/prev_close)*100,2),
-            "10 High %": round(((c10["high"]-prev_close)/prev_close)*100,2) if c10 else "",
-            "10 Low %": round(((c10["low"]-prev_close)/prev_close)*100,2) if c10 else "",
-            "12 High %": round(((c12["high"]-prev_close)/prev_close)*100,2) if c12 else "",
-            "12 Low %": round(((c12["low"]-prev_close)/prev_close)*100,2) if c12 else ""
+
+            # Gain side
+            "9:15 High %": round(((c915["high"] - prev_close) / prev_close) * 100, 2),
+            "10 High %": round(((c10["high"] - prev_close) / prev_close) * 100, 2) if c10 else "",
+            "12 High %": round(((c12["high"] - prev_close) / prev_close) * 100, 2) if c12 else "",
+
+            # Loss side
+            "9:15 Low %": round(((c915["low"] - prev_close) / prev_close) * 100, 2),
+            "10 Low %": round(((c10["low"] - prev_close) / prev_close) * 100, 2) if c10 else "",
+            "12 Low %": round(((c12["low"] - prev_close) / prev_close) * 100, 2) if c12 else ""
         })
 
-        progress.progress((i+1)/total)
+        progress.progress((i + 1) / total)
         time.sleep(0.15)
 
-    except Exception as e:
-        st.write(f"Error in {sym}: {e}")
+    except:
+        pass
 
 dfm = pd.DataFrame(rows)
 
+# ---------------- SPLIT ----------------
 gainers = dfm[dfm["% Change"] > 0].sort_values("% Change", ascending=False).head(20)
 losers  = dfm[dfm["% Change"] < 0].sort_values("% Change").head(20)
 
+# Hide unwanted columns
+gainers = gainers.drop(columns=["9:15 Low %","10 Low %","12 Low %"])
+losers  = losers.drop(columns=["9:15 High %","10 High %","12 High %"])
+
 # ---------------- DISPLAY ----------------
-st.subheader("🟢 Top 20 Gainers")
+st.subheader("🟢 Top 20 Gainers (High Levels)")
 st.dataframe(gainers, use_container_width=True)
 
-st.subheader("🔴 Top 20 Losers")
+st.subheader("🔴 Top 20 Losers (Low Levels)")
 st.dataframe(losers, use_container_width=True)
 
-st.caption("🔁 Refresh page to get latest data")
+st.caption("🔁 Refresh page for latest data")
 
