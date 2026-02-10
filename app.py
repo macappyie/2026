@@ -20,23 +20,14 @@ st.markdown("""
     font-weight: bold;
 }
 @keyframes flashGreen {
-    0% { background-color:#003300; }
-    50% { background-color:#00cc44; }
-    100% { background-color:#003300; }
+    0% { background:#002b00; }
+    50% { background:#00ff44; }
+    100% { background:#002b00; }
 }
 @keyframes flashRed {
-    0% { background-color:#330000; }
-    50% { background-color:#ff3333; }
-    100% { background-color:#330000; }
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-th, td {
-    padding: 6px;
-    text-align: center;
-    border-bottom: 1px solid #444;
+    0% { background:#330000; }
+    50% { background:#ff3333; }
+    100% { background:#330000; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -63,16 +54,16 @@ def fmt_vol(v):
     if v >= 1e3: return f"{v/1e3:.1f} K"
     return str(int(v))
 
-def flash_cell(val, threshold, is_gainer=True):
+def flash_val(val, threshold, mode):
     try:
         v = float(val)
-        if is_gainer and v >= threshold:
-            return f'<td class="flash-green">{v}</td>'
-        if (not is_gainer) and v <= -threshold:
-            return f'<td class="flash-red">{v}</td>'
-        return f"<td>{v}</td>"
+        if mode == "gainer" and v >= threshold:
+            return f'<span class="flash-green">{v}</span>'
+        if mode == "loser" and v <= -threshold:
+            return f'<span class="flash-red">{v}</span>'
+        return str(v)
     except:
-        return "<td></td>"
+        return ""
 
 # ---------------- FETCH DATA ----------------
 rows = []
@@ -141,44 +132,30 @@ dfm = pd.DataFrame(rows)
 gainers = dfm[dfm["% Change"] > 0].sort_values("% Change", ascending=False).head(20)
 losers  = dfm[dfm["% Change"] < 0].sort_values("% Change").head(20)
 
-# ---------------- RENDER TABLES ----------------
-def render_table(df, is_gainer=True):
-    html = """
-    <table>
-    <tr>
-        <th>Symbol</th>
-        <th>LTP</th>
-        <th>%</th>
-        <th>9:15</th>
-        <th>10:00</th>
-        <th>12:00</th>
-    </tr>
-    """
-    for _, r in df.iterrows():
-        html += "<tr>"
-        html += f"<td>{r['Symbol']}</td>"
-        html += f"<td>{r['LTP']}</td>"
-        html += f"<td>{r['% Change']}</td>"
+# Hide unwanted columns
+gainers = gainers.drop(columns=["9:15 Low %","10 Low %","12 Low %"])
+losers  = losers.drop(columns=["9:15 High %","10 High %","12 High %"])
 
-        if is_gainer:
-            html += flash_cell(r["9:15 High %"], 1.5, True)
-            html += flash_cell(r["10 High %"], 1.5, True)
-            html += flash_cell(r["12 High %"], 1.0, True)
-        else:
-            html += flash_cell(r["9:15 Low %"], 1.5, False)
-            html += flash_cell(r["10 Low %"], 1.5, False)
-            html += flash_cell(r["12 Low %"], 1.0, False)
+# ---------------- DISPLAY WITH FLASH ----------------
+st.subheader("🟢 Top 20 Gainers (High Levels)")
 
-        html += "</tr>"
-    html += "</table>"
-    st.markdown(html, unsafe_allow_html=True)
+g = gainers.copy()
+g["9:15 High %"] = g["9:15 High %"].apply(lambda x: flash_val(x,1.5,"gainer"))
+g["10 High %"]   = g["10 High %"].apply(lambda x: flash_val(x,1.5,"gainer"))
+g["12 High %"]   = g["12 High %"].apply(lambda x: flash_val(x,1.0,"gainer"))
 
-# ---------------- DISPLAY ----------------
-st.subheader("🟢 Top 20 Gainers (High Flash)")
-render_table(gainers, True)
+st.markdown(g.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-st.subheader("🔴 Top 20 Losers (Low Flash)")
-render_table(losers, False)
+# -------------------------------------
 
-st.caption("⚡ Flash: 9:15 & 10 ≥ 1.5% | 12 ≥ 1.0%")
+st.subheader("🔴 Top 20 Losers (Low Levels)")
+
+l = losers.copy()
+l["9:15 Low %"] = l["9:15 Low %"].apply(lambda x: flash_val(x,1.5,"loser"))
+l["10 Low %"]   = l["10 Low %"].apply(lambda x: flash_val(x,1.5,"loser"))
+l["12 Low %"]   = l["12 Low %"].apply(lambda x: flash_val(x,1.0,"loser"))
+
+st.markdown(l.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+st.caption("⚡ Flash: 9:15 & 10 ≥ 1.5% | 12 ≥ 1%")
 
