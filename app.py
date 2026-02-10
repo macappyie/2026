@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 import time
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Live Top Gainers & Losers", layout="wide")
-st.title("📊 Live Top Gainers & Losers")
+st.set_page_config(page_title="MoneyAssure Dashboard", layout="wide")
+st.title("📊 MoneyAssure Dashboard")
 
 # ---------------- FLASH CSS ----------------
 st.markdown("""
