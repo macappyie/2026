@@ -1,23 +1,21 @@
+
 import streamlit as st
 import pandas as pd
 from kiteconnect import KiteConnect
 from datetime import datetime, timedelta
 import time
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(
-    page_title="Top Gainers & Losers",
-    layout="wide"
-)
+# ---------------- CONFIG ----------------
+API_KEY = "YOUR_API_KEY"
 
-st.title("📊 Live Top Gainers & Losers")
-
-# ---------------- READ SECRETS ----------------
-API_KEY = st.secrets["API_KEY"]
-ACCESS_TOKEN = st.secrets["ACCESS_TOKEN"]
+with open("access_token.txt") as f:
+    ACCESS_TOKEN = f.read().strip()
 
 kite = KiteConnect(api_key=API_KEY)
 kite.set_access_token(ACCESS_TOKEN)
+
+st.set_page_config(page_title="Top Gainers & Losers", layout="wide")
+st.title("📊 Live Top Gainers & Losers")
 
 # ---------------- LOAD INSTRUMENTS ----------------
 df = pd.read_csv("instruments.csv", low_memory=False)
@@ -34,17 +32,14 @@ def fmt_vol(v):
     if v >= 1e3: return f"{v/1e3:.1f} K"
     return str(int(v))
 
-# ---------------- FETCH DATA ----------------
+# ---------------- DATA FETCH ----------------
 rows = []
 today = datetime.now().date()
 
 tokens = [symbol_token[s] for s in WATCHLIST if s in symbol_token]
 quotes = kite.quote(tokens)
 
-progress = st.progress(0)
-total = len(WATCHLIST)
-
-for i, sym in enumerate(WATCHLIST):
+for sym in WATCHLIST:
     try:
         token = symbol_token[sym]
         q = quotes[str(token)]
@@ -89,11 +84,9 @@ for i, sym in enumerate(WATCHLIST):
             "12 Low %": round(((c12["low"]-prev_close)/prev_close)*100,2) if c12 else ""
         })
 
-        progress.progress((i+1)/total)
-        time.sleep(0.15)
-
-    except Exception as e:
-        st.write(f"Error in {sym}: {e}")
+        time.sleep(0.2)
+    except:
+        pass
 
 dfm = pd.DataFrame(rows)
 
@@ -107,5 +100,5 @@ st.dataframe(gainers, use_container_width=True)
 st.subheader("🔴 Top 20 Losers")
 st.dataframe(losers, use_container_width=True)
 
-st.caption("🔁 Refresh page to get latest data")
+st.caption("Auto refresh page for latest data")
 
