@@ -8,6 +8,39 @@ import time
 st.set_page_config(page_title="Live Top Gainers & Losers", layout="wide")
 st.title("📊 Live Top Gainers & Losers")
 
+# ---------------- FLASH CSS ----------------
+st.markdown("""
+<style>
+.flash-green {
+    animation: flashGreen 1s infinite;
+    font-weight: bold;
+}
+.flash-red {
+    animation: flashRed 1s infinite;
+    font-weight: bold;
+}
+@keyframes flashGreen {
+    0% { background-color:#003300; }
+    50% { background-color:#00cc44; }
+    100% { background-color:#003300; }
+}
+@keyframes flashRed {
+    0% { background-color:#330000; }
+    50% { background-color:#ff3333; }
+    100% { background-color:#330000; }
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 6px;
+    text-align: center;
+    border-bottom: 1px solid #444;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------- SECRETS ----------------
 API_KEY = st.secrets["API_KEY"]
 ACCESS_TOKEN = st.secrets["ACCESS_TOKEN"]
@@ -29,6 +62,17 @@ def fmt_vol(v):
     if v >= 1e5: return f"{v/1e5:.2f} L"
     if v >= 1e3: return f"{v/1e3:.1f} K"
     return str(int(v))
+
+def flash_cell(val, threshold, is_gainer=True):
+    try:
+        v = float(val)
+        if is_gainer and v >= threshold:
+            return f'<td class="flash-green">{v}</td>'
+        if (not is_gainer) and v <= -threshold:
+            return f'<td class="flash-red">{v}</td>'
+        return f"<td>{v}</td>"
+    except:
+        return "<td></td>"
 
 # ---------------- FETCH DATA ----------------
 rows = []
@@ -77,13 +121,9 @@ for i, sym in enumerate(WATCHLIST):
             "% Change": pct,
             "Avg Vol 7D": avg_vol,
             "Today Vs Avg": today_vs,
-
-            # Gain side
             "9:15 High %": round(((c915["high"] - prev_close) / prev_close) * 100, 2),
             "10 High %": round(((c10["high"] - prev_close) / prev_close) * 100, 2) if c10 else "",
             "12 High %": round(((c12["high"] - prev_close) / prev_close) * 100, 2) if c12 else "",
-
-            # Loss side
             "9:15 Low %": round(((c915["low"] - prev_close) / prev_close) * 100, 2),
             "10 Low %": round(((c10["low"] - prev_close) / prev_close) * 100, 2) if c10 else "",
             "12 Low %": round(((c12["low"] - prev_close) / prev_close) * 100, 2) if c12 else ""
@@ -101,16 +141,44 @@ dfm = pd.DataFrame(rows)
 gainers = dfm[dfm["% Change"] > 0].sort_values("% Change", ascending=False).head(20)
 losers  = dfm[dfm["% Change"] < 0].sort_values("% Change").head(20)
 
-# Hide unwanted columns
-gainers = gainers.drop(columns=["9:15 Low %","10 Low %","12 Low %"])
-losers  = losers.drop(columns=["9:15 High %","10 High %","12 High %"])
+# ---------------- RENDER TABLES ----------------
+def render_table(df, is_gainer=True):
+    html = """
+    <table>
+    <tr>
+        <th>Symbol</th>
+        <th>LTP</th>
+        <th>%</th>
+        <th>9:15</th>
+        <th>10:00</th>
+        <th>12:00</th>
+    </tr>
+    """
+    for _, r in df.iterrows():
+        html += "<tr>"
+        html += f"<td>{r['Symbol']}</td>"
+        html += f"<td>{r['LTP']}</td>"
+        html += f"<td>{r['% Change']}</td>"
+
+        if is_gainer:
+            html += flash_cell(r["9:15 High %"], 1.5, True)
+            html += flash_cell(r["10 High %"], 1.5, True)
+            html += flash_cell(r["12 High %"], 1.0, True)
+        else:
+            html += flash_cell(r["9:15 Low %"], 1.5, False)
+            html += flash_cell(r["10 Low %"], 1.5, False)
+            html += flash_cell(r["12 Low %"], 1.0, False)
+
+        html += "</tr>"
+    html += "</table>"
+    st.markdown(html, unsafe_allow_html=True)
 
 # ---------------- DISPLAY ----------------
-st.subheader("🟢 Top 20 Gainers (High Levels)")
-st.dataframe(gainers, use_container_width=True)
+st.subheader("🟢 Top 20 Gainers (High Flash)")
+render_table(gainers, True)
 
-st.subheader("🔴 Top 20 Losers (Low Levels)")
-st.dataframe(losers, use_container_width=True)
+st.subheader("🔴 Top 20 Losers (Low Flash)")
+render_table(losers, False)
 
-st.caption("🔁 Refresh page for latest data")
+st.caption("⚡ Flash: 9:15 & 10 ≥ 1.5% | 12 ≥ 1.0%")
 
