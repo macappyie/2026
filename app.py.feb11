@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from kiteconnect import KiteConnect
 from datetime import datetime, timedelta
-import time, json, os
+import time
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="MoneyAssure Dashboard", layout="wide")
@@ -39,8 +39,6 @@ ACCESS_TOKEN = st.secrets["ACCESS_TOKEN"]
 kite = KiteConnect(api_key=API_KEY)
 kite.set_access_token(ACCESS_TOKEN)
 
-RANK_FILE = "open_rank.json"
-
 # ---------------- LOAD INSTRUMENTS ----------------
 df = pd.read_csv("instruments.csv", low_memory=False)
 df = df[(df.exchange == "NSE") & (df.instrument_type == "EQ")]
@@ -59,31 +57,18 @@ def fmt_vol(v):
 def flash_val(val, threshold, mode):
     try:
         v = float(val)
+
+        # GAINER → weak high
         if mode == "gainer" and v < threshold:
             return f'<span class="flash-green">{v}</span>'
+
+        # LOSER → weak low
         if mode == "loser" and v > -threshold:
             return f'<span class="flash-red">{v}</span>'
+
         return str(v)
     except:
         return ""
-
-# ---------------- RANK MEMORY ----------------
-def is_new_day():
-    if not os.path.exists(RANK_FILE):
-        return True
-    d = datetime.fromtimestamp(os.path.getmtime(RANK_FILE)).date()
-    return d != datetime.now().date()
-
-def load_ranks():
-    if os.path.exists(RANK_FILE):
-        with open(RANK_FILE) as f:
-            return json.load(f)
-    return {"gainers":{}, "losers":{}}
-
-def save_ranks(r):
-    with open(RANK_FILE,"w") as f:
-        json.dump(r,f)
-
 
 # ---------------- FETCH DATA ----------------
 rows = []
@@ -142,58 +127,40 @@ for i, sym in enumerate(WATCHLIST):
 
         progress.progress((i + 1) / total)
         time.sleep(0.15)
+
     except:
         pass
 
 dfm = pd.DataFrame(rows)
 
-# ---------------- APPLY RANK ----------------
-if is_new_day():
-    ranks = {"gainers":{}, "losers":{}}
-else:
-    ranks = load_ranks()
-
-gainers_tmp = dfm[dfm["% Change"] > 0].sort_values("% Change", ascending=False)
-losers_tmp  = dfm[dfm["% Change"] < 0].sort_values("% Change")
-
-for i,r in enumerate(gainers_tmp.itertuples(),1):
-    if r.Symbol not in ranks["gainers"]:
-        ranks["gainers"][r.Symbol] = i
-
-for i,r in enumerate(losers_tmp.itertuples(),1):
-    if r.Symbol not in ranks["losers"]:
-        ranks["losers"][r.Symbol] = i
-
-save_ranks(ranks)
-
-
-dfm["Rank"] = dfm.apply(
-    lambda x: ranks["gainers"].get(x["Symbol"])
-    if x["% Change"] > 0
-    else ranks["losers"].get(x["Symbol"]),
-    axis=1
-)
-
 # ---------------- SPLIT ----------------
-gainers = dfm[dfm["% Change"] > 0].sort_values("Rank").head(20)
-losers  = dfm[dfm["% Change"] < 0].sort_values("Rank").head(20)
+gainers = dfm[dfm["% Change"] > 0].sort_values("% Change", ascending=False).head(20)
+losers  = dfm[dfm["% Change"] < 0].sort_values("% Change").head(20)
 
+# Hide unwanted columns
 gainers = gainers.drop(columns=["9:15 Low %","10 Low %","12 Low %"])
 losers  = losers.drop(columns=["9:15 High %","10 High %","12 High %"])
 
-# ---------------- DISPLAY ----------------
+# ---------------- DISPLAY WITH FLASH ----------------
 st.subheader("🟢 Top 20 Gainers (High Levels)")
+
 g = gainers.copy()
 g["9:15 High %"] = g["9:15 High %"].apply(lambda x: flash_val(x,1.5,"gainer"))
 g["10 High %"]   = g["10 High %"].apply(lambda x: flash_val(x,1.5,"gainer"))
 g["12 High %"]   = g["12 High %"].apply(lambda x: flash_val(x,1.0,"gainer"))
+
 st.markdown(g.to_html(escape=False, index=False), unsafe_allow_html=True)
 
+# -------------------------------------
+
 st.subheader("🔴 Top 20 Losers (Low Levels)")
+
 l = losers.copy()
 l["9:15 Low %"] = l["9:15 Low %"].apply(lambda x: flash_val(x,1.5,"loser"))
 l["10 Low %"]   = l["10 Low %"].apply(lambda x: flash_val(x,1.5,"loser"))
 l["12 Low %"]   = l["12 Low %"].apply(lambda x: flash_val(x,1.0,"loser"))
+
 st.markdown(l.to_html(escape=False, index=False), unsafe_allow_html=True)
 
 st.caption("⚡ Flash: 9:15 & 10 ≥ 1.5% | 12 ≥ 1%")
+
